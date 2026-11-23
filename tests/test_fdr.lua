@@ -32,7 +32,7 @@ TAXI_NODES = {
 Fire("TAXIMAP_OPENED")
 RunAfters()
 check(FlightDataRecorderPanel:IsShown() and FlightDataRecorderPanel.title:GetText() == "Flight times from Sentinel Hill"
-    and FlightDataRecorderPanel.lines[1].name:GetText():find("None recorded yet", 1, true) ~= nil,
+    and FlightDataRecorderPanel.lines[1].name:GetText():find("None from here yet", 1, true) ~= nil,
     "at a flight master with nothing recorded, the panel says so")
 
 TakeTaxiNode(1)
@@ -57,6 +57,27 @@ local route = ns.Route(10, 2)
 check(route and route.time == 134 and route.flown == 1 and route.toName == "Stormwind, Elwynn", "landing records the route: 2:14")
 check(not FlightDataRecorderBar:IsShown() and ns.db.current == nil and Printed():find("Flight recorded: Sentinel Hill to Stormwind, 2:14", 1, true),
     "the bar goes and chat says what was recorded: " .. Printed())
+
+-- From Stormwind, the way back is estimated from the way there.
+TAXI_NODES[1].state, TAXI_NODES[2].state = 0, 1
+Fire("TAXIMAP_OPENED")
+RunAfters()
+check(FlightDataRecorderPanel.lines[1].name:GetText() == "Sentinel Hill" and FlightDataRecorderPanel.lines[1].time:GetText() == "~2:14"
+    and FlightDataRecorderPanel.note:IsShown(), "a route flown only the other way shows that time as an estimate (~)")
+TakeTaxiNode(2)
+Fire("TAXIMAP_CLOSED")
+ON_TAXI = true
+Tick()
+CLOCK = CLOCK + 14
+Tick()
+check(FlightDataRecorderBar.clock:GetText() == "~2:00" and FlightDataRecorderBar.where:GetText():find("REC", 1, true),
+    "and counts down from it, marked ~, while this way is recorded: " .. FlightDataRecorderBar.clock:GetText())
+CLOCK = CLOCK + 116
+ON_TAXI = false
+Tick()
+check(ns.Route(2, 10) and ns.Route(2, 10).time == 130 and ns.Estimate(2, 10) == 130, "landing records this way's own time")
+ns.db.routes["2>10"] = nil
+TAXI_NODES[1].state, TAXI_NODES[2].state = 1, 0
 
 -- The same route again counts down.
 Fire("TAXIMAP_OPENED")

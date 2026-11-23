@@ -89,6 +89,35 @@ function ns.Route(fromID, toID)
     return ns.db.routes[RouteKey(fromID, toID)]
 end
 
+-- How long a flight takes: the recorded time, or, for a route only flown
+-- the other way so far, that time as an estimate (flights take about as
+-- long either way). Returns seconds and whether it is an estimate.
+function ns.Estimate(fromID, toID)
+    local route = ns.Route(fromID, toID)
+    if route and route.time then return route.time, false end
+    local back = ns.Route(toID, fromID)
+    if back and back.time then return back.time, true end
+end
+
+-- Every destination with a time from a node, quickest first: { id, name,
+-- time, estimated }. Routes only flown the other way are estimates.
+function ns.TimesFrom(fromID)
+    local list, seen = {}, {}
+    for _, route in pairs(ns.db.routes) do
+        if route.from == fromID and route.time then
+            list[#list + 1] = { id = route.to, name = route.toName, time = route.time, estimated = false }
+            seen[route.to] = true
+        end
+    end
+    for _, route in pairs(ns.db.routes) do
+        if route.to == fromID and route.time and not seen[route.from] then
+            list[#list + 1] = { id = route.from, name = route.fromName, time = route.time, estimated = true }
+        end
+    end
+    table.sort(list, function(a, b) return a.time < b.time end)
+    return list
+end
+
 -- Picking a destination on the flight map.
 function ns.OnTakeTaxiNode(slot)
     local ok, here, bySlot = pcall(ns.ReadTaxiMap)

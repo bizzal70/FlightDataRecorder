@@ -103,12 +103,18 @@ end
 -- flight left or nil while recording).
 function ns.BarText(flight, now)
     local elapsed = math.max(0, now - flight.started)
-    local route = ns.Route(flight.from, flight.to)
+    local seconds, estimated = ns.Estimate(flight.from, flight.to)
     local where = "To " .. ns.ShortName(flight.toName)
-    if route and route.time and route.time > 0 then
-        local left = route.time - elapsed
+    if seconds and seconds > 0 then
+        local left = seconds - elapsed
+        if estimated then
+            -- Only flown the other way so far: counted down from that
+            -- time (marked ~) while this way is recorded.
+            if left <= 0 then return where .. "  |cffff6666REC|r", ns.Clock(elapsed), nil end
+            return where .. "  |cffff6666REC|r", "~" .. ns.Clock(left), left / seconds
+        end
         if left <= 0 then return where, "Landing", 0 end
-        return where, ns.Clock(left), left / route.time
+        return where, ns.Clock(left), left / seconds
     end
     return where .. "  |cffff6666REC|r", ns.Clock(elapsed), nil
 end
@@ -155,6 +161,10 @@ panel.title:SetPoint("TOPRIGHT", -10, -8)
 panel.title:SetJustifyH("LEFT")
 panel.title:SetTextColor(0.4, 0.76, 1)
 panel.lines = {}
+panel.note = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+panel.note:SetPoint("BOTTOMLEFT", 10, 8)
+panel.note:SetText("~ timed the other way so far")
+panel.note:Hide()
 
 local MAX_PANEL_LINES = 18
 
@@ -188,8 +198,9 @@ function ns.PanelLines()
     local here = ns.ReadTaxiMap()
     if not here then return nil end
     local lines = {}
-    for _, route in ipairs(ns.RoutesFrom(here.id)) do
-        lines[#lines + 1] = { name = ns.ShortName(route.toName), clock = ns.Clock(route.time) }
+    for _, entry in ipairs(ns.TimesFrom(here.id)) do
+        lines[#lines + 1] = { name = ns.ShortName(entry.name), clock = (entry.estimated and "~" or "") .. ns.Clock(entry.time),
+            estimated = entry.estimated }
     end
     return lines, here
 end
@@ -206,6 +217,7 @@ function ns.ShowPanel()
             line = PanelLine(index)
             line.name:SetText(lines[index].name)
             line.time:SetText(lines[index].clock)
+            if lines[index].estimated then line.time:SetTextColor(0.7, 0.7, 0.7) else line.time:SetTextColor(1, 1, 1) end
             line.name:Show(); line.time:Show()
         elseif line then
             line.name:Hide(); line.time:Hide()
@@ -213,12 +225,15 @@ function ns.ShowPanel()
     end
     if shown == 0 then
         local line = PanelLine(1)
-        line.name:SetText("None recorded yet: fly one and FDR times it.")
+        line.name:SetText("None from here yet.")
         line.time:SetText("")
         line.name:Show(); line.time:Show()
         shown = 1
     end
-    panel:SetHeight(20 + (shown + 1) * 16)
+    local estimates = false
+    for index = 1, shown do if lines[index] and lines[index].estimated then estimates = true end end
+    panel.note:SetShown(estimates)
+    panel:SetHeight(20 + (shown + 1) * 16 + (estimates and 16 or 0))
     panel:ClearAllPoints()
     local window = TaxiWindow()
     if window then
@@ -255,10 +270,11 @@ function ns.AddTooltipTime(tooltip)
     if type(text) ~= "string" or (issecretvalue and issecretvalue(text)) then return end
     local here = ns.ReadTaxiMap()
     if not here then return end
-    for _, route in ipairs(ns.RoutesFrom(here.id)) do
-        if route.toName == text or ns.ShortName(route.toName) == text then
+    for _, entry in ipairs(ns.TimesFrom(here.id)) do
+        if entry.name == text or ns.ShortName(entry.name) == text then
             adding = true
-            tooltip:AddLine(("Flight time: %s"):format(ns.Clock(route.time)), 0.4, 0.76, 1)
+            tooltip:AddLine(entry.estimated and ("Flight time: about %s (timed the other way)"):format(ns.Clock(entry.time))
+                or ("Flight time: %s"):format(ns.Clock(entry.time)), 0.4, 0.76, 1)
             tooltip:Show()
             adding = false
             return true

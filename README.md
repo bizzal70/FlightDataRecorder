@@ -6,7 +6,7 @@ FDR times every flight-master flight in World of Warcraft: Forever, from take of
 
 - **Records every flight.** Pick a destination at a flight master and FDR notes the route; it times the flight from take off to landing and keeps the time. Routes are shared by all your characters.
 - **Counts down to landing.** On a route it has timed before, a bar at the top of the screen shows where you are going and how long is left. On a new route the bar says **REC** and counts up while it records.
-- **Times at the flight master.** Beside the flight map, a panel lists the recorded times from where you are standing, quickest first; hovering a destination adds its time to the tooltip.
+- **Times at the flight master.** Beside the flight map, a panel lists the recorded times from where you are standing, quickest first; hovering a destination adds its time to the tooltip. A route flown so far only the other way shows that time as an estimate, marked **~** (flights take about as long either way), and the bar counts down from it while it records.
 - **The logbook.** Type `/fdr` for every recorded route, grouped by where it starts, with its time and how often you have flown it.
 - **Survives a /reload in the air:** the flight in progress is saved and carries on.
 
