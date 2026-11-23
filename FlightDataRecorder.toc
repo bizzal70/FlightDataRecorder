@@ -1,0 +1,13 @@
+## Interface: 16001
+## Title: FDR - Flight Data Recorder
+## Notes: Times every flight-master flight, remembers each route, and counts your next flight down to landing. Type /fdr.
+## Author: bizzal70
+## Version: 0.1.0
+## SavedVariables: FlightDataRecorderDB
+## IconTexture: Interface\Icons\Ability_Mount_Gryphon_01
+## AddonCompartmentFunc: FlightDataRecorder_OnAddonCompartmentClick
+
+PadClose.lua
+Core.lua
+Bar.lua
+Logbook.lua
