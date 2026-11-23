@@ -47,7 +47,7 @@ Outline(bar, 0.6)
 bar.fill = bar:CreateTexture(nil, "ARTWORK")
 bar.fill:SetPoint("TOPLEFT", 1, -1)
 bar.fill:SetPoint("BOTTOMLEFT", 1, 1)
-bar.fill:SetColorTexture(0.25, 0.55, 0.85, 0.55)
+bar.fill:SetColorTexture(0.10, 0.28, 0.50, 0.85)
 
 bar.icon = bar:CreateTexture(nil, "OVERLAY")
 bar.icon:SetSize(BAR_HEIGHT - 8, BAR_HEIGHT - 8)
@@ -134,7 +134,7 @@ function ns.UpdateBar()
     bar.clock:SetText(clock)
     if share then
         bar.fill:SetWidth(math.max(1, (BAR_WIDTH - 2) * share))
-        bar.fill:SetColorTexture(0.25, 0.55, 0.85, 0.55)
+        bar.fill:SetColorTexture(0.10, 0.28, 0.50, 0.85)
         bar.fill:Show()
     else
         -- Recording a new route: a red fill that does not count down.
