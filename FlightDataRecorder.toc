@@ -4,6 +4,7 @@
 ## Author: bizzal70
 ## Version: 0.1.1
 ## SavedVariables: FlightDataRecorderDB
+## X-Curse-Project-ID: 1827045
 ## IconTexture: Interface\Icons\Ability_Mount_Gryphon_01
 ## AddonCompartmentFunc: FlightDataRecorder_OnAddonCompartmentClick
 
