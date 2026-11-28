@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="FDR_LOGBOOK" header="FDR" category="ADDONS">
+		FlightDataRecorder_ToggleLogbook()
+	</Binding>
+</Bindings>

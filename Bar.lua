@@ -149,9 +149,25 @@ end
 -- At the flight master
 ----------------------------------------------------------------------------
 
+local PANEL_WIDTH = 250
 local panel = CreateFrame("Frame", "FlightDataRecorderPanel", UIParent)
-panel:SetSize(250, 60)
+panel:SetSize(PANEL_WIDTH, 60)
 panel:SetFrameStrata("HIGH")
+-- Never partly off screen (a wide flight map on a small screen).
+panel:SetClampedToScreen(true)
+
+-- Which side of the flight map the panel goes: the right, unless the map
+-- reaches so near the screen's right edge that the panel wouldn't fit
+-- there, then the left.
+function ns.PanelSide(window)
+    local right = window.GetRight and window:GetRight()
+    local screen = UIParent.GetRight and UIParent:GetRight()
+    if type(right) ~= "number" or type(screen) ~= "number" then return "right" end
+    local scale = (window.GetEffectiveScale and window:GetEffectiveScale() or 1)
+        / (UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
+    if right * scale + 6 + PANEL_WIDTH > screen then return "left" end
+    return "right"
+end
 panel:Hide()
 Fill(panel, 0.05, 0.05, 0.06, 0.92)
 Outline(panel, 0.55)
@@ -237,7 +253,11 @@ function ns.ShowPanel()
     panel:ClearAllPoints()
     local window = TaxiWindow()
     if window then
-        panel:SetPoint("TOPLEFT", window, "TOPRIGHT", 6, 0)
+        if ns.PanelSide(window) == "right" then
+            panel:SetPoint("TOPLEFT", window, "TOPRIGHT", 6, 0)
+        else
+            panel:SetPoint("TOPRIGHT", window, "TOPLEFT", -6, 0)
+        end
     else
         panel:SetPoint("LEFT", UIParent, "LEFT", 40, 60)
     end

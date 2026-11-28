@@ -113,8 +113,9 @@ check(ns2.flight and ns2.flight.to == 2 and ns2.flight.started == saved.started,
 CLOCK = CLOCK + 101
 ON_TAXI = false
 for _, fn in ipairs(TICKERS) do fn() end
-check(ns2.Route(10, 2).flown == 2 and ns2.Route(10, 2).time == 135 and PRINTED[#PRINTED]:find("last time 2:14", 1, true),
-    "and is recorded on landing, compared with last time: " .. PRINTED[#PRINTED])
+check(ns2.Route(10, 2).flown == 2 and ns2.Route(10, 2).time == 134 and ns2.Route(10, 2).lastTime == 135
+    and PRINTED[#PRINTED]:find("2:15 (usually 2:14)", 1, true),
+    "and is recorded on landing; the usual time is the quicker middle of the last flights: " .. PRINTED[#PRINTED])
 ns = ns2
 
 -- Picking a destination but not flying is forgotten; so is a cancelled take off.
@@ -159,3 +160,88 @@ SlashCmdList.FLIGHTDATARECORDER("clear")
 check(next(ns.db.routes) ~= nil, "/fdr clear asks to be typed twice")
 SlashCmdList.FLIGHTDATARECORDER("clear")
 check(next(ns.db.routes) == nil, "and then forgets every flight")
+
+-- 0.2.0: the usual time, one slow flight, the alert, forgetting one route,
+-- quiet, settings in the logbook, binding, debug.
+check(ns.UsualTime({ 134 }) == 134 and ns.UsualTime({ 134, 300 }) == 134 and ns.UsualTime({ 140, 134, 300 }) == 140,
+    "the usual time is the middle of the recent flights, the quicker one of two")
+local function Fly(fromSlot, toSlot, seconds)
+    for _, node in ipairs(TAXI_NODES) do node.state = node.slotIndex == fromSlot and 0 or 1 end
+    TakeTaxiNode(toSlot)
+    ON_TAXI = true
+    Tick()
+    CLOCK = CLOCK + seconds
+    ON_TAXI = false
+    Tick()
+end
+Fly(2, 1, 134)
+Fly(2, 1, 400)
+check(ns.Route(10, 2).time == 134 and PRINTED[#PRINTED]:find("a slow one", 1, true),
+    "one slow flight (lag, a loading screen) doesn't replace a good time: " .. PRINTED[#PRINTED])
+for _ = 1, 6 do Fly(2, 1, 150) end
+check(#ns.Route(10, 2).times == 5 and ns.Route(10, 2).time == 150, "only the last 5 flights count, so a changed route catches up")
+
+-- The alert, 10 seconds before landing on a known route.
+local sounds, said = SOUNDS, nil
+UIErrorsFrame = { AddMessage = function(_, text) said = text end }
+for _, node in ipairs(TAXI_NODES) do node.state = node.slotIndex == 2 and 0 or 1 end
+TakeTaxiNode(1)
+ON_TAXI = true
+Tick()
+CLOCK = CLOCK + 130
+Tick()
+check(SOUNDS == sounds and said == nil, "no alert while there's longer to go")
+CLOCK = CLOCK + 10
+Tick()
+check(SOUNDS == sounds + 1 and said == "Landing at Stormwind in 10 seconds", "a sound and a note 10 seconds before landing: " .. tostring(said))
+CLOCK = CLOCK + 3
+Tick()
+check(SOUNDS == sounds + 1, "only once")
+ON_TAXI = false
+CLOCK = CLOCK + 7
+Tick()
+
+-- Quiet.
+local printedBefore = #PRINTED
+SlashCmdList.FLIGHTDATARECORDER("quiet")
+check(ns.db.chat == false, "/fdr quiet turns the landing line off")
+printedBefore = #PRINTED
+Fly(2, 1, 150)
+check(#PRINTED == printedBefore, "and then landing says nothing in chat")
+SlashCmdList.FLIGHTDATARECORDER("quiet")
+
+-- An old route saved before 0.2.0 keeps its time.
+ns.db.routes["99>98"] = { from = 99, to = 98, fromName = "Old", toName = "Older", time = 77, flown = 3 }
+Fire("ADDON_LOADED", "FlightDataRecorder")
+check(ns.db.routes["99>98"].times and ns.db.routes["99>98"].times[1] == 77, "routes saved by 0.1 keep their time")
+
+-- The logbook: settings ticks, forgetting one route, its spot.
+if not FlightDataRecorderLogbook:IsShown() then SlashCmdList.FLIGHTDATARECORDER("") end
+FlightDataRecorderLogbook.__scripts.OnShow(FlightDataRecorderLogbook)
+local ticks = ns.LogbookTicks()
+check(#ticks == 4, "the logbook has the four settings")
+for _, t in ipairs(ticks) do
+    if t.key == "alert" then t.__scripts.OnClick(t) end
+end
+check(ns.db.alert == false, "ticking one in the logbook changes it")
+ns.db.alert = true
+check(not ns.PressForget("99>98") and ns.db.routes["99>98"], "the x on a route asks first")
+check(ns.PressForget("99>98") and ns.db.routes["99>98"] == nil and PRINTED[#PRINTED]:find("Forgot Old to Older", 1, true),
+    "and forgets it on the second press")
+ns.db.routes["99>98"] = { from = 99, to = 98, fromName = "Old", toName = "Older", time = 77, times = { 77 } }
+ns.PressForget("99>98")
+CLOCK = CLOCK + 10
+RunAfters()
+check(not ns.PressForget("99>98") and ns.db.routes["99>98"], "a second press long after the first asks again")
+
+-- The flight map panel goes left of a map near the screen's right edge.
+UIParent.GetRight = function() return 1000 end
+check(ns.PanelSide({ GetRight = function() return 600 end }) == "right", "the panel sits right of the flight map when there's room")
+check(ns.PanelSide({ GetRight = function() return 900 end }) == "left", "and left of it when there isn't")
+UIParent.GetRight = nil
+
+check(BINDING_NAME_FDR_LOGBOOK and type(FlightDataRecorder_ToggleLogbook) == "function", "a key binding opens the logbook")
+printedBefore = #PRINTED
+SlashCmdList.FLIGHTDATARECORDER("debug")
+check(PRINTED[printedBefore + 1]:find("version", 1, true), "/fdr debug starts with the version")
+

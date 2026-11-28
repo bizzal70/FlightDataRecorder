@@ -2,7 +2,7 @@
 ## Title: FDR - Flight Data Recorder
 ## Notes: Times every flight-master flight, remembers each route, and counts your next flight down to landing. Type /fdr.
 ## Author: bizzal70
-## Version: 0.1.1
+## Version: 0.2.0
 ## SavedVariables: FlightDataRecorderDB
 ## X-Curse-Project-ID: 1827045
 ## IconTexture: Interface\Icons\Ability_Mount_Gryphon_01

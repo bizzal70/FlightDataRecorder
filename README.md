@@ -4,10 +4,10 @@ FDR times every flight-master flight in World of Warcraft: Forever, from take of
 
 ## What it does
 
-- **Records every flight.** Pick a destination at a flight master and FDR notes the route; it times the flight from take off to landing and keeps the time. Routes are shared by all your characters.
-- **Counts down to landing.** On a route it has timed before, a bar at the top of the screen shows where you are going and how long is left. On a new route the bar says **REC** and counts up while it records.
+- **Records every flight.** Pick a destination at a flight master and FDR notes the route; it times the flight from take off to landing. Each route keeps its last 5 flights and counts down from the middle one, so one flight slowed by lag or a loading screen doesn't spoil it. Routes are shared by all your characters.
+- **Counts down to landing.** On a route it has timed before, a bar at the top of the screen shows where you are going and how long is left, and 10 seconds before landing a sound and a note at the top of the screen tell you to get ready. On a new route the bar says **REC** and counts up while it records.
 - **Times at the flight master.** Beside the flight map, a panel lists the recorded times from where you are standing, quickest first; hovering a destination adds its time to the tooltip. A route flown so far only the other way shows that time as an estimate, marked **~** (flights take about as long either way), and the bar counts down from it while it records.
-- **The logbook.** Type `/fdr` for every recorded route, grouped by where it starts, with its time and how often you have flown it.
+- **The logbook.** Type `/fdr` (or set a key in Options > Keybindings > AddOns) for every recorded route, grouped by where it starts, with its time and how often you have flown it. Press a route's **x** twice to forget it, so the next flight records it afresh. The settings are at the bottom: the flight bar, the times beside the flight map, the line in chat on landing, and the alert. FDR is also in Esc > Options > AddOns.
 - **Survives a /reload in the air:** the flight in progress is saved and carries on.
 
 ## Commands
@@ -17,12 +17,15 @@ FDR times every flight-master flight in World of Warcraft: Forever, from take of
 | `/fdr` | The logbook (also from the addon list on the minimap) |
 | `/fdr bar` | The flight bar on or off |
 | `/fdr panel` | The flight times beside the flight map on or off |
+| `/fdr quiet` | The line in chat on landing on or off |
+| `/fdr alert` | The alert 10 seconds before landing on or off |
 | `/fdr reset` | Put the flight bar back at the top of the screen (drag it to move it) |
 | `/fdr clear` | Forget every recorded flight (type it twice) |
+| `/fdr debug` | Version and key facts, to paste into a [bug report](https://github.com/bizzal70/FlightDataRecorder/issues) |
 
 ## Controller
 
-While the logbook is open, the D-pad scrolls it and **B** closes it, like Escape. As soon as a fight starts, or once it is closed, those buttons go back to whatever you have them set to. The logbook shrinks itself to fit small screens such as the Legion Go and Steam Deck.
+While the logbook is open, the D-pad scrolls it and **B** closes it, like Escape. As soon as a fight starts, or once it is closed, those buttons go back to whatever you have them set to. The logbook shrinks itself to fit small screens such as the Legion Go, ROG Ally and Steam Deck, and remembers where you drag it.
 
 ## Good to know
 

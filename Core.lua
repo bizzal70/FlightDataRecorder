@@ -12,10 +12,16 @@ local addonName, ns = ...
 
 ns.addonName = addonName
 
-local DEFAULTS = { bar = true, mapPanel = true }
+-- chat: a line in chat on landing; alert: a sound and a note on screen
+-- shortly before landing.
+local DEFAULTS = { bar = true, mapPanel = true, chat = true, alert = true }
 local BOARD_WAIT = 20       -- seconds to wait for take off after picking a destination
 local MIN_FLIGHT = 5        -- shorter "flights" (a cancelled take off) are not recorded
 local RESUME_LIMIT = 2 * 3600
+local KEEP_TIMES = 5        -- recent flights kept per route; the usual time is their middle one
+local ALERT_AHEAD = 10      -- seconds before landing for the alert
+local ALERT_SOUND = SOUNDKIT and SOUNDKIT.MAP_PING or 3175
+ns.ISSUES = "github.com/bizzal70/FlightDataRecorder/issues"
 
 local pending          -- destination picked, not in the air yet
 ns.flight = nil        -- the flight in the air: from, to, fromName, toName, started
@@ -43,6 +49,19 @@ local function Usable(value)
 end
 
 local function RouteKey(from, to) return tostring(from) .. ">" .. tostring(to) end
+ns.RouteKey = RouteKey
+
+-- The usual time of a route: the middle of its last few flights (the
+-- quicker middle one when there is an even number). A flight slowed by
+-- lag or a loading screen doesn't replace a good time, and a route the
+-- game has changed catches up after a few flights.
+function ns.UsualTime(times)
+    if type(times) ~= "table" or #times == 0 then return nil end
+    local sorted = {}
+    for i, seconds in ipairs(times) do sorted[i] = seconds end
+    table.sort(sorted)
+    return sorted[math.floor((#sorted + 1) / 2)]
+end
 
 -- What the flight map shows right now: the node the player stands at, and
 -- every node by its slot on the map. Uses C_TaxiMap where there is one, the
@@ -139,10 +158,20 @@ local function Land()
     local before = route and route.time
     route = route or { from = flight.from, to = flight.to }
     route.fromName, route.toName = flight.fromName, flight.toName
-    route.time, route.flown, route.last = seconds, (route.flown or 0) + 1, time()
+    route.times = type(route.times) == "table" and route.times or {}
+    table.insert(route.times, seconds)
+    while #route.times > KEEP_TIMES do table.remove(route.times, 1) end
+    route.time, route.lastTime = ns.UsualTime(route.times), seconds
+    route.flown, route.last = (route.flown or 0) + 1, time()
     ns.db.routes[key] = route
-    if before then
-        ns.Print(("Landed at %s: %s (last time %s)."):format(ns.ShortName(flight.toName), ns.Clock(seconds), ns.Clock(before)))
+    if not ns.db.chat then
+        -- Quiet: no line in chat.
+    elseif before then
+        local note = ("usually %s"):format(ns.Clock(route.time))
+        if seconds > route.time + 15 then
+            note = note .. "; a slow one, which doesn't change the countdown"
+        end
+        ns.Print(("Landed at %s: %s (%s)."):format(ns.ShortName(flight.toName), ns.Clock(seconds), note))
     else
         ns.Print(("Flight recorded: %s to %s, %s. Next time FDR counts it down."):format(
             ns.ShortName(flight.fromName), ns.ShortName(flight.toName), ns.Clock(seconds)))
@@ -150,11 +179,32 @@ local function Land()
     if ns.RefreshLogbook then ns.RefreshLogbook() end
 end
 
+-- Shortly before landing on a route with a recorded time (not an estimate
+-- from the other way): a sound and a note on screen, once per flight.
+local function MaybeAlert(flight)
+    if not ns.db.alert or flight.alerted then return end
+    local seconds, estimated = ns.Estimate(flight.from, flight.to)
+    if not seconds or estimated then return end
+    local left = seconds - (time() - flight.started)
+    if left > ALERT_AHEAD or left < 0 then return end
+    flight.alerted = true
+    if PlaySound then pcall(PlaySound, ALERT_SOUND, "SFX") end
+    if UIErrorsFrame and UIErrorsFrame.AddMessage then
+        pcall(UIErrorsFrame.AddMessage, UIErrorsFrame, ("Landing at %s in %d seconds"):format(
+            ns.ShortName(flight.toName), math.max(1, math.floor(left + 0.5))), 0.4, 0.76, 1)
+    end
+end
+
 -- Watches for take off and landing.
 function ns.Tick()
     local onTaxi = UnitOnTaxi and UnitOnTaxi("player")
     if ns.flight then
-        if not onTaxi then Land() elseif ns.UpdateBar then ns.UpdateBar() end
+        if not onTaxi then
+            Land()
+        else
+            MaybeAlert(ns.flight)
+            if ns.UpdateBar then ns.UpdateBar() end
+        end
         return
     end
     if pending then
@@ -188,13 +238,24 @@ events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" and name == addonName then
+        local newInstall = FlightDataRecorderDB == nil
         FlightDataRecorderDB = FlightDataRecorderDB or {}
         ns.db = FlightDataRecorderDB
         ns.db.routes = ns.db.routes or {}
         for key, value in pairs(DEFAULTS) do
             if ns.db[key] == nil then ns.db[key] = value end
         end
+        -- Routes saved before 0.2.0 kept only the latest time.
+        for _, route in pairs(ns.db.routes) do
+            if type(route.times) ~= "table" and route.time then route.times = { route.time } end
+        end
+        -- The welcome line is for new players; existing ones know FDR.
+        if ns.db.welcomed == nil then ns.db.welcomed = not newInstall end
     elseif event == "PLAYER_LOGIN" then
+        if not ns.db.welcomed then
+            ns.db.welcomed = true
+            ns.Print("Times your flight-master flights and counts the next one down to landing. Type /fdr for the logbook and settings.")
+        end
         if TakeTaxiNode then
             hooksecurefunc("TakeTaxiNode", function(slot) pcall(ns.OnTakeTaxiNode, slot) end)
         end
@@ -218,6 +279,24 @@ SlashCmdList.FLIGHTDATARECORDER = function(message)
     elseif command == "panel" then
         ns.db.mapPanel = not ns.db.mapPanel
         ns.Print("Flight times beside the flight map " .. (ns.db.mapPanel and "on." or "off."))
+    elseif command == "quiet" then
+        ns.db.chat = not ns.db.chat
+        ns.Print(ns.db.chat and "A line in chat on landing again." or "No more lines in chat on landing.")
+    elseif command == "alert" then
+        ns.db.alert = not ns.db.alert
+        ns.Print(ns.db.alert and ("A sound and a note on screen %d seconds before landing."):format(ALERT_AHEAD)
+            or "No alert before landing.")
+    elseif command == "debug" then
+        local routes = 0
+        for _ in pairs(ns.db.routes) do routes = routes + 1 end
+        local version = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version") or "?"
+        ns.Print(("version %s; %d routes recorded; bar %s, map panel %s, chat %s, alert %s."):format(tostring(version), routes,
+            ns.db.bar and "on" or "off", ns.db.mapPanel and "on" or "off", ns.db.chat and "on" or "off", ns.db.alert and "on" or "off"))
+        local flight = ns.flight
+        ns.Print(("in the air: %s; flight map API: %s; on a taxi: %s."):format(
+            flight and (tostring(flight.from) .. " to " .. tostring(flight.to)) or "no",
+            (C_TaxiMap and C_TaxiMap.GetAllTaxiNodes) and "C_TaxiMap" or (NumTaxiNodes and "TaxiNode" or "none"),
+            tostring(UnitOnTaxi and UnitOnTaxi("player") or false)))
     elseif command == "reset" then
         ns.db.barPoint = nil
         ns.PlaceBar()
@@ -235,11 +314,32 @@ SlashCmdList.FLIGHTDATARECORDER = function(message)
         ns.Print("/fdr - the logbook of recorded flights")
         ns.Print("/fdr bar - the flight bar on or off")
         ns.Print("/fdr panel - flight times beside the flight map on or off")
+        ns.Print("/fdr quiet - the line in chat on landing on or off")
+        ns.Print("/fdr alert - the alert before landing on or off")
         ns.Print("/fdr reset - put the flight bar back at the top of the screen")
-        ns.Print("/fdr clear - forget every recorded flight")
+        ns.Print("/fdr clear - forget every recorded flight (one route: its x in the logbook)")
+        ns.Print("/fdr debug - version and key facts, for a bug report at " .. ns.ISSUES)
     end
 end
 
+-- Forgets one route, so the next flight on it records it afresh.
+function ns.ForgetRoute(key)
+    local route = ns.db.routes[key]
+    if not route then return false end
+    ns.db.routes[key] = nil
+    ns.Print(("Forgot %s to %s; the next flight there records it again."):format(
+        ns.ShortName(route.fromName), ns.ShortName(route.toName)))
+    if ns.RefreshLogbook then ns.RefreshLogbook() end
+    return true
+end
+
 function FlightDataRecorder_OnAddonCompartmentClick()
+    ns.ToggleLogbook()
+end
+
+-- Key binding (Options > Keybindings > AddOns).
+BINDING_HEADER_FDR = "FDR - Flight Data Recorder"
+BINDING_NAME_FDR_LOGBOOK = "Open the logbook"
+function FlightDataRecorder_ToggleLogbook()
     ns.ToggleLogbook()
 end
